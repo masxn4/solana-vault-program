@@ -13,11 +13,19 @@ pub mod solana_vault_program {
         vault.bump = ctx.bumps.vault;
         vault.total_deposited = 0;
         vault.total_withdrawn = 0;
+        vault.paused = false;
         emit!(VaultInitialized { vault: vault.key(), authority: vault.authority });
         Ok(())
     }
 
+    pub fn set_paused(ctx: Context<ManageVault>, paused: bool) -> Result<()> {
+        ctx.accounts.vault.paused = paused;
+        emit!(PauseChanged { vault: ctx.accounts.vault.key(), paused });
+        Ok(())
+    }
+
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
+        require!(!ctx.accounts.vault.paused, VaultError::VaultPaused);
         require!(amount > 0, VaultError::ZeroAmount);
         transfer(
             CpiContext::new(
@@ -43,6 +51,7 @@ pub mod solana_vault_program {
     }
 
     pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
+        require!(!ctx.accounts.vault.paused, VaultError::VaultPaused);
         require!(amount > 0, VaultError::ZeroAmount);
         let rent = Rent::get()?.minimum_balance(Vault::SPACE);
         let balance = ctx.accounts.vault.to_account_info().lamports();
@@ -71,6 +80,13 @@ pub struct Initialize<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ManageVault<'info> {
+    #[account(mut, seeds = [b"vault", authority.key().as_ref()], bump = vault.bump, has_one = authority)]
+    pub vault: Account<'info, Vault>,
+    pub authority: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -110,16 +126,19 @@ pub struct Vault {
     pub bump: u8,
     pub total_deposited: u64,
     pub total_withdrawn: u64,
+    pub paused: bool,
 }
 
 impl Vault {
-    pub const SPACE: usize = 8 + 32 + 1 + 8 + 8;
+    pub const SPACE: usize = 8 + 32 + 1 + 8 + 8 + 1;
 }
 
 #[event]
 pub struct VaultInitialized { pub vault: Pubkey, pub authority: Pubkey }
 #[event]
 pub struct Deposited { pub vault: Pubkey, pub authority: Pubkey, pub amount: u64 }
+#[event]
+pub struct PauseChanged { pub vault: Pubkey, pub paused: bool }
 #[event]
 pub struct VaultClosed { pub vault: Pubkey, pub authority: Pubkey }
 #[event]
@@ -135,4 +154,6 @@ pub enum VaultError {
     MathOverflow,
     #[msg("Withdraw funds before closing the vault.")]
     VaultNotEmpty,
+    #[msg("The vault is paused.")]
+    VaultPaused,
 }
