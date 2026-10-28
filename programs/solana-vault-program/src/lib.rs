@@ -35,6 +35,13 @@ pub mod solana_vault_program {
         Ok(())
     }
 
+    pub fn close_vault(ctx: Context<CloseVault>) -> Result<()> {
+        let rent = Rent::get()?.minimum_balance(Vault::SPACE);
+        require!(ctx.accounts.vault.to_account_info().lamports() <= rent, VaultError::VaultNotEmpty);
+        emit!(VaultClosed { vault: ctx.accounts.vault.key(), authority: ctx.accounts.authority.key() });
+        Ok(())
+    }
+
     pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
         require!(amount > 0, VaultError::ZeroAmount);
         let rent = Rent::get()?.minimum_balance(Vault::SPACE);
@@ -76,6 +83,20 @@ pub struct Deposit<'info> {
 }
 
 #[derive(Accounts)]
+pub struct CloseVault<'info> {
+    #[account(
+        mut,
+        close = authority,
+        seeds = [b"vault", authority.key().as_ref()],
+        bump = vault.bump,
+        has_one = authority
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
 pub struct Withdraw<'info> {
     #[account(mut, seeds = [b"vault", authority.key().as_ref()], bump = vault.bump, has_one = authority)]
     pub vault: Account<'info, Vault>,
@@ -100,6 +121,8 @@ pub struct VaultInitialized { pub vault: Pubkey, pub authority: Pubkey }
 #[event]
 pub struct Deposited { pub vault: Pubkey, pub authority: Pubkey, pub amount: u64 }
 #[event]
+pub struct VaultClosed { pub vault: Pubkey, pub authority: Pubkey }
+#[event]
 pub struct Withdrawn { pub vault: Pubkey, pub authority: Pubkey, pub amount: u64 }
 
 #[error_code]
@@ -110,4 +133,6 @@ pub enum VaultError {
     InsufficientFunds,
     #[msg("Arithmetic overflow.")]
     MathOverflow,
+    #[msg("Withdraw funds before closing the vault.")]
+    VaultNotEmpty,
 }
