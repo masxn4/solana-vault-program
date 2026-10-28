@@ -1,0 +1,6 @@
+{
+  "name": "solana-vault-program",
+  "private": true,
+  "scripts": {"test":"anchor test","lint":"prettier --check "tests/**/*.ts"","format":"prettier --write "tests/**/*.ts""},
+  "devDependencies":{"@coral-xyz/anchor":"^0.32.1","@types/chai":"^5.0.1","@types/mocha":"^10.0.10","chai":"^5.1.2","prettier":"^3.4.2","ts-mocha":"^10.0.0","typescript":"^5.7.2"}
+}
